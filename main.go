@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -91,11 +92,27 @@ func main() {
 
 	currentTime := time.Now()
 	var headline string
-	// If after 8 AM, simply we are generating for the next day
-	if currentTime.Hour() >= 8 {
 
-		currentTime = currentTime.AddDate(0, 0, 1)
+	var daysShift int = -1
+
+	if len(os.Args) > 1 {
+		daysShift, err = strconv.Atoi(os.Args[1])
+		if err != nil {
+			fmt.Println("Failed to parse days shift param: ", os.Args[1])
+			os.Exit(-1)
+		}
+
+		fmt.Println("Parsed days shift param: ", daysShift)
+		currentTime = currentTime.AddDate(0, 0, daysShift)
+
+	} else {
+		// If after 8 AM, simply we are generating for the next day
+		if currentTime.Hour() >= 8 {
+
+			currentTime = currentTime.AddDate(0, 0, 1)
+		}
 	}
+
 	headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
 
 	fmt.Println(headline)
@@ -110,10 +127,12 @@ func main() {
 		fmt.Println("Failed to Send Poll", gJID)
 
 	}
+
+	time.Sleep(5 * time.Second)
 	// Listen to Ctrl+C (you can also do something else that prevents the program from exiting)
 	// c := make(chan os.Signal, 1)
 	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	// <-c
 
-	// client.Disconnect()
+	client.Disconnect()
 }
