@@ -3,9 +3,9 @@ module example.com/whats_app_poll
 go 1.22.5
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/mdp/qrterminal/v3 v3.2.0
-	go.mau.fi/whatsmeow v0.0.0-20240821142752-3d63c6fcc1a7
+	go.mau.fi/whatsmeow v0.0.0-20240828153534-8acde1ba8592
 )
 
 require (
@@ -19,8 +19,8 @@ require (
 	go.mau.fi/util v0.7.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/sys v0.24.0 // indirect
-	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/term v0.24.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
