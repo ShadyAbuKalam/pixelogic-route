@@ -32,6 +32,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	// If you want multiple sessions, remember their JIDs and use .GetDevice(jid) or .GetAllDevices() instead.
 	deviceStore, err := container.GetFirstDevice()
 	if err != nil {
@@ -70,6 +71,9 @@ func main() {
 		}
 	}
 
+	// A hectic trial to wait for a few seconds, to see if it will update the Keys.
+	time.Sleep(10 * time.Second)
+
 	strJID := "120363048809400922@g.us"
 	var gJID types.JID
 	gJID, err = types.ParseJID(strJID)
@@ -80,18 +84,7 @@ func main() {
 
 	}
 
-	var optionNames []string
-	optionNames = append(optionNames, "القاهرة للمبيعات")
-	optionNames = append(optionNames, "الف مسكن")
-	optionNames = append(optionNames, "حجاز - الملف")
-	optionNames = append(optionNames, "حجاز - البنك")
-	optionNames = append(optionNames, "هليوبوليس")
-	optionNames = append(optionNames, "روكسي")
-	optionNames = append(optionNames, "كوبري التجنيد")
-	optionNames = append(optionNames, "كوبري المطرية")
-
 	currentTime := time.Now()
-	var headline string
 
 	var daysShift int = -1
 
@@ -113,18 +106,15 @@ func main() {
 		}
 	}
 
-	headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+	sendPoll(client, gJID, currentTime)
+	if currentTime.Weekday() == time.Friday {
+		// Send for Saturday
+		currentTime = currentTime.AddDate(0, 0, 1)
+		sendPoll(client, gJID, currentTime)
 
-	fmt.Println(headline)
-	pollMessage := client.BuildPollCreation(headline, optionNames, 1)
-
-	fmt.Println("Create Poll Message succuessfully  : ", pollMessage)
-
-	_, err = client.SendMessage(context.Background(), gJID, pollMessage)
-	if err != nil {
-		fmt.Println("Sent Poll Succuessfully ", strJID)
-	} else {
-		fmt.Println("Failed to Send Poll", gJID)
+		// Send for Sunday
+		currentTime = currentTime.AddDate(0, 0, 1)
+		sendPoll(client, gJID, currentTime)
 
 	}
 
@@ -135,4 +125,32 @@ func main() {
 	// <-c
 
 	client.Disconnect()
+	container.Close()
+}
+
+func sendPoll(client *whatsmeow.Client, gJID types.JID, currentTime time.Time) {
+	var optionNames []string
+	optionNames = append(optionNames, "القاهرة للمبيعات")
+	optionNames = append(optionNames, "الف مسكن")
+	optionNames = append(optionNames, "حجاز - الملف")
+	optionNames = append(optionNames, "حجاز - البنك")
+	optionNames = append(optionNames, "هليوبوليس")
+	optionNames = append(optionNames, "روكسي")
+	optionNames = append(optionNames, "كوبري التجنيد")
+	optionNames = append(optionNames, "كوبري المطرية")
+
+	headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+
+	fmt.Println(headline)
+	pollMessage := client.BuildPollCreation(headline, optionNames, 1)
+
+	fmt.Println("Create Poll Message succuessfully  : ", pollMessage)
+
+	_, err := client.SendMessage(context.Background(), gJID, pollMessage)
+	if err != nil {
+		fmt.Println("Sent Poll Succuessfully ", gJID)
+	} else {
+		fmt.Println("Failed to Send Poll", gJID)
+
+	}
 }
