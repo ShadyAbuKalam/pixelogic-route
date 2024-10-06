@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -40,11 +41,11 @@ func main() {
 	}
 	clientLog := waLog.Stdout("Client", "DEBUG", true)
 	client := whatsmeow.NewClient(deviceStore, clientLog)
-	client.AddEventHandler(eventHandler)
+	// client.AddEventHandler(eventHandler)
 
 	if client.Store.ID == nil {
 		fmt.Println("Client store ID is nil, scanning QR")
-		// No ID stored, new login
+		// 	// No ID stored, new login
 		qrChan, _ := client.GetQRChannel(context.Background())
 		err = client.Connect()
 		if err != nil {
@@ -106,15 +107,33 @@ func main() {
 		}
 	}
 
-	sendPoll(client, gJID, currentTime)
+	file, err := os.Open("options.txt")
+	if err != nil {
+		fmt.Println("Failed to open option.txt file: ", err)
+		os.Exit(-1)
+	}
+	defer file.Close()
+
+	var optionNames []string
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		optionNames = append(optionNames, scanner.Text())
+	}
+	fmt.Println("Options are: ", optionNames)
+	headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+
+	sendPoll(client, gJID, headline, optionNames)
 	if currentTime.Weekday() == time.Friday {
 		// Send for Saturday
 		currentTime = currentTime.AddDate(0, 0, 1)
-		sendPoll(client, gJID, currentTime)
+		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+		sendPoll(client, gJID, headline, optionNames)
 
 		// Send for Sunday
 		currentTime = currentTime.AddDate(0, 0, 1)
-		sendPoll(client, gJID, currentTime)
+		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+		sendPoll(client, gJID, headline, optionNames)
 
 	}
 
@@ -128,18 +147,7 @@ func main() {
 	container.Close()
 }
 
-func sendPoll(client *whatsmeow.Client, gJID types.JID, currentTime time.Time) {
-	var optionNames []string
-	optionNames = append(optionNames, "القاهرة للمبيعات")
-	optionNames = append(optionNames, "الف مسكن")
-	optionNames = append(optionNames, "حجاز - الملف")
-	optionNames = append(optionNames, "حجاز - البنك")
-	optionNames = append(optionNames, "هليوبوليس")
-	optionNames = append(optionNames, "روكسي")
-	optionNames = append(optionNames, "كوبري التجنيد")
-	optionNames = append(optionNames, "كوبري المطرية")
-
-	headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionNames []string) {
 
 	fmt.Println(headline)
 	pollMessage := client.BuildPollCreation(headline, optionNames, 1)
