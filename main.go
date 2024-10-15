@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -26,7 +29,33 @@ func eventHandler(evt interface{}) {
 	}
 }
 
+func changeDirToOneContainingRunningBinary() {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("Can't get directory of running binary")
+	}
+	dirname := filepath.Dir(filename)
+	os.Chdir(dirname)
+}
+
 func main() {
+	changeDirToOneContainingRunningBinary()
+
+	// Only run if it has been more than 8 hours of latest timestamp.
+	content, err := os.ReadFile("last_timestamp.txt")
+	var lastTimestamp int64 = 0
+	if err == nil {
+		contentstr := string(content)
+		contentstr = strings.TrimSpace(contentstr)
+		lastTimestamp, _ = strconv.ParseInt(contentstr, 10, 64)
+
+	}
+	timeDifference := 12 * time.Hour
+	if lastTimestamp+int64(timeDifference.Seconds()) > time.Now().Unix() {
+		println("Already sent poll for: ", time.Unix(lastTimestamp, 0).String())
+		return
+	}
+
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	// Make sure you add appropriate DB connector imports, e.g. github.com/mattn/go-sqlite3 for SQLite
 	container, err := sqlstore.New("sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
@@ -106,6 +135,8 @@ func main() {
 			currentTime = currentTime.AddDate(0, 0, 1)
 		}
 	}
+	currentTime = time.Date(
+		currentTime.Year(), currentTime.Month(), currentTime.Day(), 0, 0, 0, 0, currentTime.Location())
 
 	file, err := os.Open("options.txt")
 	if err != nil {
@@ -123,17 +154,17 @@ func main() {
 	fmt.Println("Options are: ", optionNames)
 	headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
 
-	sendPoll(client, gJID, headline, optionNames)
+	lastSuccess := sendPoll(client, gJID, headline, optionNames)
 	if currentTime.Weekday() == time.Friday {
 		// Send for Saturday
 		currentTime = currentTime.AddDate(0, 0, 1)
 		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
-		sendPoll(client, gJID, headline, optionNames)
+		lastSuccess = sendPoll(client, gJID, headline, optionNames)
 
 		// Send for Sunday
 		currentTime = currentTime.AddDate(0, 0, 1)
 		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
-		sendPoll(client, gJID, headline, optionNames)
+		lastSuccess = sendPoll(client, gJID, headline, optionNames)
 
 	}
 
@@ -145,9 +176,19 @@ func main() {
 
 	client.Disconnect()
 	container.Close()
+
+	if lastSuccess {
+
+		lastTimestampFile, err := os.Create("last_timestamp.txt")
+		if err == nil {
+			lastTimestampFile.WriteString(strconv.FormatInt(currentTime.Unix(), 10))
+		}
+
+		lastTimestampFile.Close()
+	}
 }
 
-func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionNames []string) {
+func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionNames []string) bool {
 
 	fmt.Println(headline)
 	pollMessage := client.BuildPollCreation(headline, optionNames, 1)
@@ -155,10 +196,11 @@ func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionN
 	fmt.Println("Create Poll Message succuessfully  : ", pollMessage)
 
 	_, err := client.SendMessage(context.Background(), gJID, pollMessage)
-	if err != nil {
+	if err == nil {
 		fmt.Println("Sent Poll Succuessfully ", gJID)
+		return true
 	} else {
 		fmt.Println("Failed to Send Poll", gJID)
-
+		return false
 	}
 }
