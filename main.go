@@ -90,8 +90,6 @@ func readLocations() []Location {
 				location.jid, err = types.ParseJID(rowCell)
 				if err != nil {
 					fmt.Println("Failed to parse JID: ", rowCell)
-				} else {
-					fmt.Println("Parsed JID correctly", location.jid)
 				}
 			} else {
 				location.pickupPoints = append(location.pickupPoints, rowCell)
