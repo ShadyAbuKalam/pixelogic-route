@@ -5,12 +5,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/akamensky/argparse"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
@@ -23,9 +26,9 @@ import (
 func eventHandler(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
-		fmt.Println("Received a message from !", v.Info.Sender)
-
-		fmt.Println("Received a message!", v.Message.GetConversation())
+		fmt.Println(v.Info.Sender.User)
+		fmt.Printf("%s@%s:%s\n", v.Info.MessageSource.Chat.User, v.Info.MessageSource.Chat.Server, v.Message.GetConversation())
+		fmt.Println("-----")
 	}
 }
 
@@ -39,6 +42,10 @@ func changeDirToOneContainingRunningBinary() {
 }
 
 func main() {
+	parser := argparse.NewParser("whats_app_poll", "A great app to send polls to different groups at the same time")
+	keepalive := parser.Flag("K", "keepalive", &argparse.Options{Default: false})
+	already_sent := false
+	parser.Parse(os.Args)
 	changeDirToOneContainingRunningBinary()
 
 	// Only run if it has been more than 8 hours of latest timestamp.
@@ -53,10 +60,10 @@ func main() {
 	timeDifference := 12 * time.Hour
 	if lastTimestamp+int64(timeDifference.Seconds()) > time.Now().Unix() {
 		println("Already sent poll for: ", time.Unix(lastTimestamp, 0).String())
-		return
+		already_sent = true
 	}
 
-	dbLog := waLog.Stdout("Database", "DEBUG", true)
+	dbLog := waLog.Stdout("Database", "WARN", true)
 	// Make sure you add appropriate DB connector imports, e.g. github.com/mattn/go-sqlite3 for SQLite
 	container, err := sqlstore.New("sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
 	if err != nil {
@@ -68,9 +75,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	clientLog := waLog.Stdout("Client", "DEBUG", true)
+	clientLog := waLog.Stdout("Client", "INFO", true)
 	client := whatsmeow.NewClient(deviceStore, clientLog)
-	// client.AddEventHandler(eventHandler)
+	client.AddEventHandler(eventHandler)
 
 	if client.Store.ID == nil {
 		fmt.Println("Client store ID is nil, scanning QR")
@@ -101,91 +108,82 @@ func main() {
 		}
 	}
 
-	// A hectic trial to wait for a few seconds, to see if it will update the Keys.
-	time.Sleep(10 * time.Second)
+	if !already_sent {
+		// A hectic trial to wait for a few seconds, to see if it will update the Keys.
+		time.Sleep(10 * time.Second)
 
-	strJID := "120363048809400922@g.us"
-	var gJID types.JID
-	gJID, err = types.ParseJID(strJID)
-	if err != nil {
-		fmt.Println("Failed to parse JID: ", strJID)
-	} else {
-		fmt.Println("Parsed JID correctly", gJID)
-
-	}
-
-	currentTime := time.Now()
-
-	var daysShift int = -1
-
-	if len(os.Args) > 1 {
-		daysShift, err = strconv.Atoi(os.Args[1])
+		strJID := "120363048809400922@g.us"
+		var gJID types.JID
+		gJID, err = types.ParseJID(strJID)
 		if err != nil {
-			fmt.Println("Failed to parse days shift param: ", os.Args[1])
-			os.Exit(-1)
+			fmt.Println("Failed to parse JID: ", strJID)
+		} else {
+			fmt.Println("Parsed JID correctly", gJID)
+
 		}
 
-		fmt.Println("Parsed days shift param: ", daysShift)
-		currentTime = currentTime.AddDate(0, 0, daysShift)
+		currentTime := time.Now()
 
-	} else {
 		// If after 8 AM, simply we are generating for the next day
 		if currentTime.Hour() >= 8 {
 
 			currentTime = currentTime.AddDate(0, 0, 1)
 		}
+
+		currentTime = time.Date(
+			currentTime.Year(), currentTime.Month(), currentTime.Day(), 0, 0, 0, 0, currentTime.Location())
+
+		file, err := os.Open("options.txt")
+		if err != nil {
+			fmt.Println("Failed to open option.txt file: ", err)
+			os.Exit(-1)
+		}
+		defer file.Close()
+
+		var optionNames []string
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			optionNames = append(optionNames, scanner.Text())
+		}
+		fmt.Println("Options are: ", optionNames)
+		headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+
+		lastSuccess := sendPoll(client, gJID, headline, optionNames)
+		if currentTime.Weekday() == time.Friday {
+			// Send for Saturday
+			currentTime = currentTime.AddDate(0, 0, 1)
+			headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+			lastSuccess = sendPoll(client, gJID, headline, optionNames)
+
+			// Send for Sunday
+			currentTime = currentTime.AddDate(0, 0, 1)
+			headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
+			lastSuccess = sendPoll(client, gJID, headline, optionNames)
+
+		}
+
+		time.Sleep(5 * time.Second)
+
+		if lastSuccess {
+
+			lastTimestampFile, err := os.Create("last_timestamp.txt")
+			if err == nil {
+				lastTimestampFile.WriteString(strconv.FormatInt(currentTime.Unix(), 10))
+			}
+
+			lastTimestampFile.Close()
+		}
 	}
-	currentTime = time.Date(
-		currentTime.Year(), currentTime.Month(), currentTime.Day(), 0, 0, 0, 0, currentTime.Location())
-
-	file, err := os.Open("options.txt")
-	if err != nil {
-		fmt.Println("Failed to open option.txt file: ", err)
-		os.Exit(-1)
-	}
-	defer file.Close()
-
-	var optionNames []string
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		optionNames = append(optionNames, scanner.Text())
-	}
-	fmt.Println("Options are: ", optionNames)
-	headline := "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
-
-	lastSuccess := sendPoll(client, gJID, headline, optionNames)
-	if currentTime.Weekday() == time.Friday {
-		// Send for Saturday
-		currentTime = currentTime.AddDate(0, 0, 1)
-		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
-		lastSuccess = sendPoll(client, gJID, headline, optionNames)
-
-		// Send for Sunday
-		currentTime = currentTime.AddDate(0, 0, 1)
-		headline = "Auto-generated: " + fmt.Sprintf("%d/%d/%d", currentTime.Day(), currentTime.Month(), currentTime.Year())
-		lastSuccess = sendPoll(client, gJID, headline, optionNames)
-
-	}
-
-	time.Sleep(5 * time.Second)
 	// Listen to Ctrl+C (you can also do something else that prevents the program from exiting)
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	// <-c
-
+	if *keepalive {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+	}
 	client.Disconnect()
 	container.Close()
 
-	if lastSuccess {
-
-		lastTimestampFile, err := os.Create("last_timestamp.txt")
-		if err == nil {
-			lastTimestampFile.WriteString(strconv.FormatInt(currentTime.Unix(), 10))
-		}
-
-		lastTimestampFile.Close()
-	}
 }
 
 func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionNames []string) bool {
