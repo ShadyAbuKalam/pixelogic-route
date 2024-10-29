@@ -83,7 +83,9 @@ func readLocations() []Location {
 
 		index := 0
 		for _, rowCell := range col {
-
+			if len(rowCell) == 0 {
+				continue
+			}
 			if index == 0 {
 				location.name = rowCell
 			} else if index == 1 {
@@ -97,7 +99,9 @@ func readLocations() []Location {
 
 			index += 1
 		}
-		locations = append(locations, location)
+		if len(location.name) != 0 {
+			locations = append(locations, location)
+		}
 	}
 
 	for i := 0; i < len(locations); i++ {
@@ -193,7 +197,9 @@ func main() {
 	if !allSent {
 		for i := 0; i < len(locations); i++ {
 			fmt.Println("----Start Location----")
+			fmt.Println("Sending to: ", locations[i])
 			sendLocation(client, &locations[i])
+			time.Sleep(5 * time.Second)
 			fmt.Println("----End Location----")
 		}
 
