@@ -98,7 +98,6 @@ func readLocations() []Location {
 			}
 
 			index += 1
-			fmt.Print(rowCell, "\t")
 		}
 		locations = append(locations, location)
 	}
@@ -182,7 +181,7 @@ func main() {
 		if canSend(location.lasttimestamp) {
 			allSent = false
 		} else {
-			println("Already sent poll for: ", time.Unix(location.lasttimestamp, 0).String())
+			println("Already sent poll for: ", location.name, time.Unix(location.lasttimestamp, 0).String())
 
 		}
 	}
