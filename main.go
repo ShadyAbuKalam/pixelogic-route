@@ -192,7 +192,9 @@ func main() {
 
 	if !allSent {
 		for i := 0; i < len(locations); i++ {
-			sendLocation(client, &locations[0])
+			fmt.Println("----Start Location----")
+			sendLocation(client, &locations[i])
+			fmt.Println("----End Location----")
 		}
 
 		writeLasttimestamps(locations)
