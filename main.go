@@ -47,7 +47,7 @@ type Location struct {
 	pickupPoints  []string
 }
 
-func readLocations() []Location {
+func readLocations(filepath string) []Location {
 
 	var locations []Location
 
@@ -58,7 +58,7 @@ func readLocations() []Location {
 		json.Unmarshal(content, &entries)
 	}
 
-	f, err := excelize.OpenFile("routes.xlsx")
+	f, err := excelize.OpenFile(filepath)
 
 	if err != nil {
 		fmt.Println(err)
@@ -174,10 +174,11 @@ func createClient() (*whatsmeow.Client, *sqlstore.Container) {
 func main() {
 	parser := argparse.NewParser("whats_app_poll", "A great app to send polls to different groups at the same time")
 	keepalive := parser.Flag("K", "keepalive", &argparse.Options{Default: false})
+	routes := parser.String("R", "routes", &argparse.Options{Default: "routes.xlsx"})
 	parser.Parse(os.Args)
 	changeDirToOneContainingRunningBinary()
 
-	locations := readLocations()
+	locations := readLocations(*routes)
 	allSent := true
 	for _, location := range locations {
 		if canSend(location.lasttimestamp) {
@@ -196,11 +197,13 @@ func main() {
 
 	if !allSent {
 		for i := 0; i < len(locations); i++ {
-			fmt.Println("----Start Location----")
-			fmt.Println("Sending to: ", locations[i])
-			sendLocation(client, &locations[i])
-			time.Sleep(5 * time.Second)
-			fmt.Println("----End Location----")
+			if canSend(locations[i].lasttimestamp) {
+				fmt.Println("----Start Location----")
+				fmt.Println("Sending to: ", locations[i])
+				sendLocation(client, &locations[i])
+				time.Sleep(5 * time.Second)
+				fmt.Println("----End Location----")
+			}
 		}
 
 		writeLasttimestamps(locations)
