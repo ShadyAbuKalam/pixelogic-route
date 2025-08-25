@@ -122,17 +122,19 @@ func writeLasttimestamps(locations []Location) {
 	}
 }
 
+var gcontext = context.Background()
+
 func createClient() (*whatsmeow.Client, *sqlstore.Container) {
 
 	dbLog := waLog.Stdout("Database", "WARN", true)
 	// Make sure you add appropriate DB connector imports, e.g. github.com/mattn/go-sqlite3 for SQLite
-	container, err := sqlstore.New("sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
+	container, err := sqlstore.New(gcontext, "sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
 	if err != nil {
 		panic(err)
 	}
 
 	// If you want multiple sessions, remember their JIDs and use .GetDevice(jid) or .GetAllDevices() instead.
-	deviceStore, err := container.GetFirstDevice()
+	deviceStore, err := container.GetFirstDevice(gcontext)
 	if err != nil {
 		panic(err)
 	}
@@ -143,7 +145,7 @@ func createClient() (*whatsmeow.Client, *sqlstore.Container) {
 	if client.Store.ID == nil {
 		fmt.Println("Client store ID is nil, scanning QR")
 		// 	// No ID stored, new login
-		qrChan, _ := client.GetQRChannel(context.Background())
+		qrChan, _ := client.GetQRChannel(gcontext)
 		err = client.Connect()
 		if err != nil {
 			panic(err)
@@ -168,6 +170,8 @@ func createClient() (*whatsmeow.Client, *sqlstore.Container) {
 			panic(err)
 		}
 	}
+
+	client.AcceptTOSNotice("20601218", "5")
 
 	return client, container
 }
@@ -288,7 +292,7 @@ func sendPoll(client *whatsmeow.Client, gJID types.JID, headline string, optionN
 
 	fmt.Println("Create Poll Message succuessfully  : ", pollMessage)
 
-	_, err := client.SendMessage(context.Background(), gJID, pollMessage)
+	_, err := client.SendMessage(gcontext, gJID, pollMessage)
 	if err == nil {
 		fmt.Println("Sent Poll Succuessfully ", gJID)
 		return true
