@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -94,6 +95,7 @@ func readLocations(filepath string) []Location {
 					fmt.Println("Failed to parse JID: ", rowCell)
 				}
 			} else {
+				rowCell = strings.TrimSpace(rowCell)
 				location.pickupPoints = append(location.pickupPoints, rowCell)
 			}
 
